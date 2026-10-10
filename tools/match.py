@@ -18,6 +18,7 @@ artist agree). Misses are recorded as null so they aren't searched again.
 import argparse
 import base64
 import difflib
+import html
 import json
 import random
 import re
@@ -337,6 +338,9 @@ def youtube(keys, recs, limit):
                 raise
         best = None
         for vid, vtitle, channel in run.cache[q]:
+            vtitle, channel = html.unescape(vtitle), html.unescape(channel)
+            if re.search(r"(full|complete|entire)\s+album", vtitle, re.I):
+                continue  # would play a whole album in place of one song
             # Video titles usually read "Artist - Song"; channel may be "Artist - Topic".
             ts = max(sim(rec["title"], vtitle), sim(rec["title"], vtitle.split(" - ", 1)[-1]))
             as_ = max(artist_sim(rec["artist"], [channel.replace(" - Topic", "")]),
