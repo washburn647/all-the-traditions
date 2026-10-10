@@ -262,3 +262,25 @@ body.player-open { padding-bottom: 150px; }
   .yt-panel iframe { width: 100%; }
 }
 .linkish { background: none; border: none; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+/* ---- Send to Spotify dialog ---- */
+.send-dialog {
+  border: 1px solid var(--line); border-radius: 14px; padding: 22px 22px 18px;
+  background: var(--surface); color: var(--ink); width: min(440px, calc(100vw - 32px));
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.25);
+}
+.send-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.send-dialog h3 { margin-right: 28px; }
+.send-x { position: absolute; top: 10px; right: 10px; border: none; background: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; width: 32px; height: 32px; border-radius: 999px; }
+.send-x:hover { background: var(--badge-bg); color: var(--ink); }
+.device-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+.device {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
+  font: inherit; font-weight: 600; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+}
+.device:hover { border-color: var(--accent); }
+.device-icon { font-size: 1.3rem; }
+.device .muted { margin-left: auto; font-weight: 400; }
+.send-dialog details { margin: 10px 0; }
+.send-dialog summary { cursor: pointer; color: var(--ink-2); }

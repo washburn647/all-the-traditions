@@ -35,6 +35,8 @@ export function showView(iso) {
   }).join('');
 
   const cov = showCoverage(show);
+  // On phones, Spotify's web player doesn't run; sending to the app is the main way to listen.
+  const phone = matchMedia('(pointer: coarse)').matches;
   const playable = cov.sp + cov.yt + cov.ia;
   const parts = [cov.sp && `${cov.sp} on Spotify`, cov.yt && `${cov.yt} on YouTube`, cov.ia && `${cov.ia} from the Internet Archive`].filter(Boolean);
   const coverage = `${playable} of ${cov.total} songs playable${parts.length ? ` (${parts.join(', ')})` : ''}`
@@ -52,7 +54,8 @@ export function showView(iso) {
     <section>
       <h1>${esc(longDate(show))} ${holidayBadge(show)}</h1>
       <p class="muted">${WEEKDAYS[show.date.getDay()]} · ${plural(songs.length, 'song')}${start !== undefined ? ` · ${clock(start)}–${clock(end)}` : ''}</p>
-      <div class="play-row"><button class="button primary" data-play="${show.iso}" data-idx="0">▶ Play this show</button>
+      <div class="play-row"><button class="button${phone ? '' : ' primary'}" data-play="${show.iso}" data-idx="0">▶ Play this show</button>
+        <button class="button${phone ? ' primary' : ''}" data-send-show="${show.iso}">Send to Spotify app</button>
         <span class="muted small">${esc(coverage)}</span></div>
       <div class="table-wrap"><table class="plays show-table">
         <thead><tr><th>Aired</th><th>Song</th><th>Artist</th><th>Album</th><th>Plays on</th></tr></thead>

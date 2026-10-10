@@ -147,7 +147,7 @@ export function playShow(iso, startIdx = 0) {
   playAt(startIdx);
 }
 
-function close() {
+export function close() {
   stopAll();
   st.seq++;
   st.status = 'idle';

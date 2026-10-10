@@ -1,5 +1,6 @@
 import { db, loadData, loadLinks } from './data.js';
-import { initPlayer, playShow, resumePending } from './player.js';
+import { close as closePlayer, initPlayer, playShow, resumePending } from './player.js';
+import { resumeSend, sendShow } from './send.js';
 import * as spotify from './spotify.js';
 import { mountCharts, resetCharts } from './charts.js';
 import { randomShow } from './util.js';
@@ -66,7 +67,11 @@ window.addEventListener('hashchange', render);
 app.addEventListener('click', e => {
   const b = e.target.closest('[data-play]');
   if (b) playShow(b.dataset.play, Number(b.dataset.idx) || 0);
+  const s = e.target.closest('[data-send-show]');
+  if (s) sendShow(s.dataset.sendShow);
 });
+// Once a show is playing in the Spotify app, stop the page's own player.
+document.addEventListener('atr:sent', () => closePlayer());
 
 (async () => {
   initPlayer();
@@ -76,7 +81,7 @@ app.addEventListener('click', e => {
   document.body.classList.remove('loading');
   render();
   renderSpotifyStatus();
-  if (signin?.ok) resumePending();
+  if (signin?.ok && !resumeSend()) resumePending();
   if (signin?.error) alertBanner(signin.error);
 })().catch(err => {
   app.innerHTML = `<section><h1>Couldn’t load the archive</h1><p class="muted">${String(err)}</p></section>`;
