@@ -1,4 +1,6 @@
-import { db, loadData } from './data.js';
+import { db, loadData, loadLinks } from './data.js';
+import { initPlayer, playShow, resumePending } from './player.js';
+import * as spotify from './spotify.js';
 import { mountCharts, resetCharts } from './charts.js';
 import { randomShow } from './util.js';
 import { homeView, seasonView } from './views/home.js';
@@ -60,11 +62,47 @@ searchBox.addEventListener('input', () => {
 
 window.addEventListener('hashchange', render);
 
-loadData().then(() => {
+// Play buttons anywhere on a page: data-play="<show iso>" data-idx="<song index>"
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-play]');
+  if (b) playShow(b.dataset.play, Number(b.dataset.idx) || 0);
+});
+
+(async () => {
+  initPlayer();
+  // Finish a Spotify sign-in first: it rewrites the URL back to the page that started it.
+  const signin = await spotify.handleRedirect().catch(err => ({ error: err.message }));
+  await Promise.all([loadData(), loadLinks()]);
   document.body.classList.remove('loading');
   render();
-}).catch(err => {
+  renderSpotifyStatus();
+  if (signin?.ok) resumePending();
+  if (signin?.error) alertBanner(signin.error);
+})().catch(err => {
   app.innerHTML = `<section><h1>Couldn’t load the archive</h1><p class="muted">${String(err)}</p></section>`;
 });
+
+// Footer: Spotify connection state, with connect / disconnect.
+function renderSpotifyStatus() {
+  const el = document.getElementById('spotify-status');
+  el.innerHTML = spotify.isConnected()
+    ? 'Spotify: connected for playback · <button class="linkish" data-sp="out">Disconnect</button>'
+    : 'Spotify Premium? <button class="linkish" data-sp="in">Connect Spotify</button> to hear the songs matched there.';
+}
+document.getElementById('spotify-status').addEventListener('click', e => {
+  const b = e.target.closest('[data-sp]');
+  if (!b) return;
+  if (b.dataset.sp === 'in') spotify.login();
+  else { spotify.logout(); renderSpotifyStatus(); render(); }
+});
+renderSpotifyStatus();
+
+function alertBanner(text) {
+  const div = document.createElement('div');
+  div.className = 'banner wrap';
+  div.textContent = text;
+  app.before(div);
+  setTimeout(() => div.remove(), 8000);
+}
 
 window.atr = db; // handy for poking around in the console

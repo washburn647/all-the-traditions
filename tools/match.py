@@ -5,6 +5,7 @@ Usage:
   python tools/match.py archive [--sample N] [--limit N]
   python tools/match.py youtube [--limit N]        # official Data API, ~100 searches/day
   python tools/match.py report  [--sample N]
+  python tools/match.py rejudge                    # re-score cached searches after rule changes
 
 A "recording" is one (artist, title) pair. Raw API answers are cached in
 tools/cache/ so re-runs are cheap; results are merged into data/links.json,
@@ -94,13 +95,20 @@ def sim(a, b):
         return 0.0
     if a == b:
         return 1.0
-    if len(a) > 3 and len(b) > 3 and (a in b or b in a):
+    # Whole-word containment ("tam lin" in "tam lin 2002 remaster") counts as
+    # a near match, but only for substantial names: "swing" must not match
+    # "swingyoucats", nor "frost" match "frost fang wof".
+    short, long_ = sorted((a, b), key=len)
+    if (len(short.split()) >= 2 or len(short) >= 8) and f" {short} " in f" {long_} ":
         return 0.9
     return difflib.SequenceMatcher(None, a, b).ratio()
 
 
 def artist_parts(s):
     return [p for p in re.split(r"\s*(?:&|\band\b|,|/|\bwith\b|\bfeat\.?|\bfeaturing\b)\s*", s, flags=re.I) if p.strip()]
+
+
+FILLER = {"and", "the", "band", "cast", "trio", "quartet", "ensemble", "orchestra", "friends", "his", "her", "their", "with", "music", "of"}
 
 
 def artist_sim(ours, theirs):
@@ -110,7 +118,19 @@ def artist_sim(ours, theirs):
         for t in theirs:
             if sim(part, t) >= 0.9:
                 best = max(best, 0.85)
+    # Word overlap: "Coope Boyes & Simpson" vs ["Barry Coope", "Jim Boyes",
+    # "Lester Simpson"], "Hadestown Cast" vs "Hadestown Original West End Cast".
+    # Needs at least two-thirds of our significant words.
+    ours_w = set(norm(ours).split()) - FILLER
+    theirs_w = set(norm(" ".join(theirs)).split())
+    if ours_w and len(ours_w & theirs_w) / len(ours_w) >= 0.66:
+        best = max(best, 0.8)
     return best
+
+
+# Below this, artist names are different acts ("Highland Weavers" vs
+# "Tannahill Weavers" scores 0.69).
+MIN_ARTIST = 0.72
 
 
 def judge(rec, title, artists, album, dur_s):
@@ -118,12 +138,15 @@ def judge(rec, title, artists, album, dur_s):
     als = sim(rec["album"], album) if rec["album"] and album else 0.0
     dur_ok = rec["est"] is not None and dur_s and abs(dur_s - rec["est"]) <= 75
     score = 0.5 * ts + 0.35 * as_ + 0.1 * als + 0.05 * bool(dur_ok)
-    if ts >= 0.9 and (als >= 0.9 or sim(rec["artist"], album) >= 0.9):
+    if ts >= 0.9 and norm(rec["artist"]) and norm(rec["artist"]) == norm(album):
         # Band-named albums: the sheet often credits "Twist of the Wrist" where
-        # Spotify credits the players on an album of that name.
-        as_ = max(as_, 0.6)
-    if ts < 0.75 or as_ < 0.6:
+        # Spotify credits the players on an album of that name. (A matching
+        # album alone isn't enough: tribute albums and soundtracks share names.)
+        as_ = max(as_, MIN_ARTIST)
+    if ts < 0.75 or as_ < MIN_ARTIST:
         return None, score
+    if ts < 0.95 and as_ < 0.95:
+        return None, score  # both only roughly right: "Ladder To The Moon" by George Nostrand vs "To The Moon" by George Strait
     high = ts >= 0.9 and as_ >= 0.85 and (als >= 0.8 or dur_ok)
     return ("high" if high else "ok"), score
 
@@ -231,24 +254,35 @@ def spotify(keys, recs, limit):
     run.save()
 
 
+def spotify_queries(rec):
+    first = artist_parts(rec["artist"])[0] if artist_parts(rec["artist"]) else rec["artist"]
+    return (f'track:"{clean_q(rec["title"])}" artist:"{clean_q(rec["artist"])}"',
+            f'{clean_q(rec["title"])} {clean_q(first)}')
+
+
+def pick_spotify(rec, cache, fetch=None):
+    """Best acceptable track from the cached (or freshly fetched) searches."""
+    best = None
+    for q in spotify_queries(rec):
+        if q not in cache:
+            if not fetch:
+                break
+            cache[q] = fetch(q)
+            time.sleep(1.0)
+        for tid, name, artists, album, dur in cache[q]:
+            conf, score = judge(rec, name, artists, album, dur)
+            if conf and (not best or score > best[2]):
+                best = (tid, conf, score)
+        # The loose query only runs when the strict one found no acceptable
+        # match; strict field searches often return unrelated near-misses.
+        if best:
+            break
+    return [best[0], best[1]] if best else None
+
+
 def _spotify_loop(run, todo, recs, get):
     for n, key in enumerate(todo, 1):
-        rec = recs[key]
-        best = None
-        for q in (f'track:"{clean_q(rec["title"])}" artist:"{clean_q(rec["artist"])}"',
-                  f'{clean_q(rec["title"])} {clean_q(artist_parts(rec["artist"])[0] if artist_parts(rec["artist"]) else rec["artist"])}'):
-            if q not in run.cache:
-                run.cache[q] = get(q)
-                time.sleep(1.0)
-            for tid, name, artists, album, dur in run.cache[q]:
-                conf, score = judge(rec, name, artists, album, dur)
-                if conf and (not best or score > best[2]):
-                    best = (tid, conf, score)
-            # Only fall back to the loose query when the strict one found nothing
-            # at all; Spotify caps hobby apps at a few hundred searches a day.
-            if best or run.cache[q]:
-                break
-        run.record(key, [best[0], best[1]] if best else None)
+        run.record(key, pick_spotify(recs[key], run.cache, get))
         if n % 50 == 0:
             run.save()
             print(f"  {n}/{len(todo)}", flush=True)
@@ -289,7 +323,7 @@ def archive(keys, recs, limit):
         for doc in search(rec):
             creators = doc.get("creator") or []
             creators = creators if isinstance(creators, list) else [creators]
-            if artist_sim(rec["artist"], creators) < 0.6:
+            if artist_sim(rec["artist"], creators) < MIN_ARTIST:
                 continue
             meta = files(doc["identifier"])
             if meta["restricted"] or not meta["files"]:
@@ -315,6 +349,30 @@ def archive(keys, recs, limit):
 
 # --- YouTube (official Data API v3) -------------------------------------
 
+def youtube_query(rec):
+    return f'{rec["artist"]} {rec["title"]}'
+
+
+def pick_youtube(rec, candidates):
+    """[videoId, conf, [backup ids]] -- backups because some owners block
+    embedding, which only shows up when the player tries the video."""
+    ok = []
+    for vid, vtitle, channel in candidates:
+        vtitle, channel = html.unescape(vtitle), html.unescape(channel)
+        if re.search(r"(full|complete|entire)\s+album", vtitle, re.I):
+            continue  # would play a whole album in place of one song
+        # Video titles usually read "Artist - Song"; channel may be "Artist - Topic".
+        ts = max(sim(rec["title"], vtitle), sim(rec["title"], vtitle.split(" - ", 1)[-1]))
+        artist_in_title = 0.85 if len(norm(rec["artist"])) >= 4 and f" {norm(rec['artist'])} " in f" {norm(vtitle)} " else 0
+        as_ = max(artist_sim(rec["artist"], [channel.replace(" - Topic", "")]), artist_in_title)
+        if ts >= 0.75 and as_ >= MIN_ARTIST:
+            ok.append((vid, "high" if ts >= 0.9 and as_ >= 0.85 else "ok"))
+    if not ok:
+        return None
+    ok.sort(key=lambda v: v[1] != "high")  # stable: keeps YouTube's ranking within each tier
+    return [ok[0][0], ok[0][1], [v for v, _ in ok[1:3]]]
+
+
 def youtube(keys, recs, limit):
     key_ = env().get("YOUTUBE_API_KEY")
     if not key_:
@@ -324,7 +382,7 @@ def youtube(keys, recs, limit):
     print(f"YouTube: {len(todo)} searches this run")
     for key in todo:
         rec = recs[key]
-        q = f'{rec["artist"]} {rec["title"]}'
+        q = youtube_query(rec)
         if q not in run.cache:
             url = ("https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5"
                    f"&videoEmbeddable=true&q={urllib.parse.quote(q)}&key={key_}")
@@ -336,21 +394,35 @@ def youtube(keys, recs, limit):
                     print("  daily quota used up; stopping")
                     break
                 raise
-        best = None
-        for vid, vtitle, channel in run.cache[q]:
-            vtitle, channel = html.unescape(vtitle), html.unescape(channel)
-            if re.search(r"(full|complete|entire)\s+album", vtitle, re.I):
-                continue  # would play a whole album in place of one song
-            # Video titles usually read "Artist - Song"; channel may be "Artist - Topic".
-            ts = max(sim(rec["title"], vtitle), sim(rec["title"], vtitle.split(" - ", 1)[-1]))
-            as_ = max(artist_sim(rec["artist"], [channel.replace(" - Topic", "")]),
-                      0.85 if norm(rec["artist"]) and norm(rec["artist"]) in norm(vtitle) else 0)
-            if ts >= 0.75 and as_ >= 0.6:
-                conf = "high" if ts >= 0.9 and as_ >= 0.85 else "ok"
-                if not best or (conf == "high" and best[1] != "high"):
-                    best = [vid, conf]
+        best = pick_youtube(rec, run.cache[q])
         run.record(key, best)
     run.save()
+
+
+# --- re-score saved searches (no API calls) ----------------------------
+
+def rejudge(keys, recs):
+    """Re-apply the current matching rules to cached search results."""
+    links = load_json(LINKS, {})
+    sp_cache = load_json(CACHE / "sp.json", {})
+    yt_cache = load_json(CACHE / "yt.json", {})
+    changed = 0
+    for k in keys:
+        e = links.get(k)
+        if not e:
+            continue
+        if "sp" in e and spotify_queries(recs[k])[0] in sp_cache:
+            new = pick_spotify(recs[k], sp_cache)
+            changed += new != e["sp"]
+            e["sp"] = new
+        if "yt" in e and youtube_query(recs[k]) in yt_cache:
+            new = pick_youtube(recs[k], yt_cache[youtube_query(recs[k])])
+            changed += new != e["yt"]
+            e["yt"] = new
+        if e.get("sp") and "yt" in e and e["yt"] is None:
+            del e["yt"]  # now on Spotify; no YouTube needed
+    save_json(LINKS, links)
+    print(f"re-scored; {changed} links changed")
 
 
 # --- report -------------------------------------------------------------
@@ -364,7 +436,7 @@ def report(keys, recs, show_isos=None):
         hit = next((s for s in ("sp", "ia", "yt") if e.get(s)), None)
         if hit:
             tally[hit] += 1
-            conf[e[hit][-1]] += 1
+            conf[e[hit][2] if hit == "ia" else e[hit][1]] += 1
         elif "sp" in e:
             tally["none"] += 1
         else:
@@ -378,7 +450,7 @@ def report(keys, recs, show_isos=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["spotify", "archive", "youtube", "report"])
+    ap.add_argument("cmd", choices=["spotify", "archive", "youtube", "report", "rejudge"])
     ap.add_argument("--sample", type=int, help="only recordings from N random shows")
     ap.add_argument("--limit", type=int, help="stop after N recordings")
     args = ap.parse_args()
@@ -392,7 +464,8 @@ def main():
     {"spotify": lambda: spotify(keys, recs, args.limit),
      "archive": lambda: archive(keys, recs, args.limit),
      "youtube": lambda: youtube(keys, recs, args.limit),
-     "report": lambda: report(keys, recs, isos)}[args.cmd]()
+     "report": lambda: report(keys, recs, isos),
+     "rejudge": lambda: rejudge(keys, recs)}[args.cmd]()
 
 
 if __name__ == "__main__":

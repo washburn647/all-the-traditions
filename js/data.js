@@ -37,6 +37,20 @@ export async function loadData() {
   return db;
 }
 
+// data/links.json: "artist\ttitle" -> { sp: [id, conf], yt: [id, conf], ia: [item, file, conf] }
+// Filled in daily by tools/match.py; a missing file just means nothing is playable yet.
+export async function loadLinks() {
+  try {
+    db.links = await (await fetch('data/links.json', { cache: 'no-cache' })).json();
+  } catch {
+    db.links = {};
+  }
+}
+
+export function linkFor(play) {
+  return db.links?.[`${db.artists[play.artist]}\t${db.titles[play.title]}`] || null;
+}
+
 function group(plays, keyFn, n) {
   const out = Array.from({ length: n }, () => []);
   for (const p of plays) {
