@@ -41,6 +41,11 @@ export function spotifySearch(p) {
   return `https://open.spotify.com/search/${enc(q)}`;
 }
 
+// type: 'artists' | 'albums' | 'tracks' narrows Spotify's results tab.
+export function spotifyButton(query, type) {
+  return `<a class="button small" href="https://open.spotify.com/search/${enc(query)}/${type}" target="_blank" rel="noopener">Search Spotify ↗</a>`;
+}
+
 export function statTiles(items) {
   return `<div class="tiles">${items.map(([label, value]) =>
     `<div class="tile"><div class="tile-value">${value}</div><div class="tile-label">${esc(label)}</div></div>`).join('')}</div>`;

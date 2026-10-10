@@ -1,8 +1,12 @@
 // Artist, song and album pages.
 import { albumKey, countBy, db, neighborArtists, perMonth, perYear, showsOf } from '../data.js';
 import { columnChart } from '../charts.js';
-import { albumLink, artistLink, esc, fmt, rankList, statTiles, titleLink } from '../util.js';
+import { albumLink, artistLink, enc, esc, fmt, rankList, spotifyButton, statTiles, titleLink } from '../util.js';
 import { collapsible, firstLast, playsTable } from './common.js';
+
+// Small per-row Spotify search link (title + artist, tracks tab).
+const spotifyRow = (title, artist) =>
+  ` <a class="ext" href="https://open.spotify.com/search/${enc(`${title} ${artist}`)}/tracks" target="_blank" rel="noopener" title="Search Spotify">Spotify ↗</a>`;
 
 const newestFirst = plays => [...plays].sort((a, b) => a.show - b.show || a.i - b.i);
 
@@ -28,6 +32,7 @@ export function artistView(name) {
     html: `<section>
       <p class="kicker">Artist</p>
       <h1>${esc(name || 'Unknown artist')}</h1>
+      ${name ? spotifyButton(name, 'artists') : ''}
       ${statTiles([['plays', fmt(plays.length)], ['shows', fmt(shows.length)], ['different songs', fmt(songs.length)], ['years played', years]])}
       <p class="muted">First played ${firstHtml} · last played ${lastHtml}</p>
       ${timeCharts(plays, 'Plays')}
@@ -53,12 +58,13 @@ export function songView(title) {
     html: `<section>
       <p class="kicker">Song</p>
       <h1>${esc(title)}</h1>
+      ${spotifyButton(title, 'tracks')}
       ${statTiles([['plays', fmt(plays.length)], ['shows', fmt(showsOf(plays).length)], [versions.length === 1 ? 'artist' : 'different artists', fmt(versions.length)]])}
       <p class="muted">First played ${firstHtml} · last played ${lastHtml}</p>
       ${plays.length >= 4 ? timeCharts(plays, 'Plays') : ''}
     </section>
     <section class="two-col">
-      <div><h3>${versions.length === 1 ? 'Recording' : 'Versions played'}</h3>${rankList(versions.map(([a, n]) => [artistLink(a), n]), { limit: 50 })}</div>
+      <div><h3>${versions.length === 1 ? 'Recording' : 'Versions played'}</h3>${rankList(versions.map(([a, n]) => [artistLink(a) + spotifyRow(title, db.artists[a]), n]), { limit: 50 })}</div>
       <div><h3>Albums</h3>${rankList(countBy(plays, p => p.album).map(([al, n]) => [`${albumLink(al)} <span class="muted small">${esc(db.artists[db.albums[al].artist])}</span>`, n]))}</div>
     </section>
     <section>${collapsible('Every play', plays.length, playsTable(newestFirst(plays), { showAlbum: true }), plays.length <= 25)}</section>`,
@@ -79,12 +85,13 @@ export function albumView(artistName, albumName) {
       <p class="kicker">Album</p>
       <h1>${esc(albumName)}</h1>
       <p class="byline">by ${artistLink(a)}</p>
+      ${spotifyButton(`${albumName} ${artistName}`, 'albums')}
       ${statTiles([['plays', fmt(plays.length)], ['shows', fmt(showsOf(plays).length)], ['different songs', fmt(songs.length)]])}
       <p class="muted">First played ${firstHtml} · last played ${lastHtml}</p>
       ${plays.length >= 4 ? timeCharts(plays, 'Plays') : ''}
     </section>
     <section>
-      <h3>Songs played from this album</h3>${rankList(songs.map(([t, n]) => [titleLink(t), n]), { limit: 40 })}
+      <h3>Songs played from this album</h3>${rankList(songs.map(([t, n]) => [titleLink(t) + spotifyRow(db.titles[t], artistName), n]), { limit: 40 })}
     </section>
     <section>${collapsible('Every play', plays.length, playsTable(newestFirst(plays), { showArtist: false, showAlbum: false }), plays.length <= 25)}</section>`,
   };

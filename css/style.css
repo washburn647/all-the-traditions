@@ -182,3 +182,6 @@ details.more > summary { cursor: pointer; font-family: var(--serif); font-weight
 @media (max-width: 640px) {
   #search { margin-left: 0; max-width: none; }
 }
+.button.small { padding: 4px 12px; font-size: .85rem; font-weight: 600; margin: 2px 0 6px; }
+.rank .ext { color: var(--muted); font-size: .75rem; margin-left: 6px; }
+.rank .ext:hover { color: var(--accent); }
