@@ -58,6 +58,10 @@ export function rankList(rows, { limit = 15, unit = 'plays' } = {}) {
     `<li><span class="rank-name">${html}</span><span class="rank-n" title="${fmt(n)} ${unit}">${fmt(n)}</span></li>`).join('')}</ol>`;
 }
 
+// Touch-first devices (phones, tablets): Spotify's web player doesn't run there,
+// so "Send to Spotify" is the way to listen.
+export const isPhone = () => matchMedia('(pointer: coarse)').matches;
+
 export function randomShow() {
   return db.shows[Math.floor(Math.random() * db.shows.length)];
 }

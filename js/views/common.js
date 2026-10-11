@@ -1,7 +1,7 @@
 // Pieces shared by several views.
-import { db, showSongs } from '../data.js';
+import { db, linkStats, showSongs } from '../data.js';
 import { closestShows, showHoliday } from '../season.js';
-import { artistLink, esc, longDate, plural, showLink } from '../util.js';
+import { artistLink, esc, isPhone, longDate, plural, showLink } from '../util.js';
 
 export function holidayBadge(show) {
   const h = showHoliday(show);
@@ -18,9 +18,22 @@ export function artistPreview(show, n = 4) {
   return seen.map(a => esc(db.artists[a] || 'Unknown')).join(' · ');
 }
 
+// "78% playable" (or on phones "62% on Spotify", what Send to Spotify will play).
+export function playableBadge(show) {
+  const st = linkStats(show);
+  if (!st.searched) return '<span class="pct pct-none" title="The daily link search hasn’t reached this show yet">not matched yet</span>';
+  const phone = isPhone();
+  const n = phone ? st.sp : st.any;
+  const pct = Math.round((100 * n) / st.total);
+  // While the daily search is still working through a show, low numbers are provisional.
+  const label = (phone ? `${pct}% on Spotify` : `${pct}% playable`) + (st.searched < st.total ? ' so far' : '');
+  const pending = st.searched < st.total ? ` · ${st.total - st.searched} not searched yet` : '';
+  return `<span class="pct" style="--pct:${pct}%" title="${n} of ${st.total} songs${phone ? ' on Spotify' : ' have a link'}${pending}">${label}</span>`;
+}
+
 export function showCard(show, note = '') {
   return `<li class="card">
-    <div class="card-head">${showLink(show)} ${holidayBadge(show)}${note ? `<span class="muted small">${esc(note)}</span>` : ''}</div>
+    <div class="card-head">${showLink(show)} ${holidayBadge(show)}${note ? `<span class="muted small">${esc(note)}</span>` : ''}${playableBadge(show)}</div>
     <div class="card-sub">${plural(show.count, 'song')} — ${artistPreview(show)}</div>
   </li>`;
 }

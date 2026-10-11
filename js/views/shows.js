@@ -1,6 +1,6 @@
 import { db, showSongs } from '../data.js';
 import { columnChart } from '../charts.js';
-import { albumLink, artistLink, clock, esc, fmt, longDate, plural, spotifySearch, titleLink } from '../util.js';
+import { albumLink, artistLink, clock, esc, fmt, isPhone, longDate, plural, spotifySearch, titleLink } from '../util.js';
 import { holidayBadge, seasonList, showCards } from './common.js';
 import { choose, showCoverage } from '../player.js';
 
@@ -36,7 +36,7 @@ export function showView(iso) {
 
   const cov = showCoverage(show);
   // On phones, Spotify's web player doesn't run; sending to the app is the main way to listen.
-  const phone = matchMedia('(pointer: coarse)').matches;
+  const phone = isPhone();
   const playable = cov.sp + cov.yt + cov.ia;
   const parts = [cov.sp && `${cov.sp} on Spotify`, cov.yt && `${cov.yt} on YouTube`, cov.ia && `${cov.ia} from the Internet Archive`].filter(Boolean);
   const coverage = `${playable} of ${cov.total} songs playable${parts.length ? ` (${parts.join(', ')})` : ''}`

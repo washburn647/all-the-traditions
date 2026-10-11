@@ -1,5 +1,6 @@
 import { db } from '../data.js';
 import { albumLink, artistLink, esc, fmt, longDate, showLink, titleLink } from '../util.js';
+import { playableBadge } from './common.js';
 
 const fold = s => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -34,7 +35,7 @@ export function searchView(raw) {
     block('Artists', artists, artistLink),
     block('Songs', songs, titleLink),
     block('Albums', albums, i => `${albumLink(i)} <span class="muted small">${esc(db.artists[db.albums[i].artist])}</span>`),
-    shows.length ? `<div><h3>Shows</h3><ul class="plain">${shows.map(s => `<li>${showLink(s)}</li>`).join('')}</ul></div>` : '',
+    shows.length ? `<div><h3>Shows</h3><ul class="plain">${shows.map(s => `<li>${showLink(s)} ${playableBadge(s)}</li>`).join('')}</ul></div>` : '',
   ].filter(Boolean);
 
   return {

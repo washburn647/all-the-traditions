@@ -51,6 +51,24 @@ export function linkFor(play) {
   return db.links?.[`${db.artists[play.artist]}\t${db.titles[play.title]}`] || null;
 }
 
+// Per-show link coverage, independent of whether Spotify is connected:
+// any = songs with a link anywhere, sp = songs on Spotify, searched = songs
+// the daily matcher has looked at. Cached; links don't change during a visit.
+const statsCache = new Map();
+export function linkStats(show) {
+  if (statsCache.has(show.iso)) return statsCache.get(show.iso);
+  const st = { total: show.count, any: 0, sp: 0, searched: 0 };
+  for (const p of showSongs(show)) {
+    const l = linkFor(p);
+    if (!l) continue;
+    st.searched++;
+    if (l.sp) st.sp++;
+    if (l.sp || l.yt || l.ia) st.any++;
+  }
+  statsCache.set(show.iso, st);
+  return st;
+}
+
 function group(plays, keyFn, n) {
   const out = Array.from({ length: n }, () => []);
   for (const p of plays) {

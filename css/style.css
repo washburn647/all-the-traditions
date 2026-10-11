@@ -284,3 +284,12 @@ body.player-open { padding-bottom: 150px; }
 .device .muted { margin-left: auto; font-weight: 400; }
 .send-dialog details { margin: 10px 0; }
 .send-dialog summary { cursor: pointer; color: var(--ink-2); }
+
+/* "% playable" chip: a quiet fill shows the share at a glance */
+.pct {
+  margin-left: auto; font-family: var(--sans); font-size: .75rem; font-weight: 600; white-space: nowrap;
+  padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bar) 22%, transparent) var(--pct), transparent var(--pct));
+}
+.pct-none { color: var(--muted); font-weight: 400; background: none; }
+.plain .pct { margin-left: 6px; }

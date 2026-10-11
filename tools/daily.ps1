@@ -10,15 +10,15 @@ $log = 'tools\cache\daily.log'
 New-Item -ItemType Directory -Force tools\cache | Out-Null
 $env:PYTHONIOENCODING = 'utf-8'
 
-"`n=== $(Get-Date -Format 'yyyy-MM-dd HH:mm') ===" | Add-Content $log
-& $py tools\match.py spotify --limit 500 *>> $log
-& $py tools\match.py archive --limit 300 *>> $log
-& $py tools\match.py youtube *>> $log
-& $py tools\match.py report *>> $log
+"`n=== $(Get-Date -Format 'yyyy-MM-dd HH:mm') ===" | Out-File -Append -Encoding utf8 $log
+& $py tools\match.py spotify --limit 500 2>&1 | Out-File -Append -Encoding utf8 $log
+& $py tools\match.py archive --limit 300 2>&1 | Out-File -Append -Encoding utf8 $log
+& $py tools\match.py youtube 2>&1 | Out-File -Append -Encoding utf8 $log
+& $py tools\match.py report 2>&1 | Out-File -Append -Encoding utf8 $log
 
-& $git add data/links.json *>> $log
+& $git add data/links.json 2>&1 | Out-File -Append -Encoding utf8 $log
 & $git diff --cached --quiet
 if ($LASTEXITCODE -ne 0) {
-    & $git commit -q -m "Daily link matching $(Get-Date -Format 'yyyy-MM-dd')" *>> $log
-    & $git push -q origin main *>> $log
+    & $git commit -q -m "Daily link matching $(Get-Date -Format 'yyyy-MM-dd')" 2>&1 | Out-File -Append -Encoding utf8 $log
+    & $git push -q origin main 2>&1 | Out-File -Append -Encoding utf8 $log
 }
